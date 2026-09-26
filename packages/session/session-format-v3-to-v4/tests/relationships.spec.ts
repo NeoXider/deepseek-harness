@@ -146,6 +146,14 @@ describe('mandatory V4 dependent event restoration', () => {
     expect(() => reopen([...begin(), ...end(), dispatch('end')])).toThrow('PTC dispatch has no unique start')
   })
 
+  it('accepts a late PTC start only for an earlier recorded root tool call', () => {
+    const rootCall = row('tool/call', { ...step, callId: 'root', name: 'read', arguments: '{}' })
+    const prior = [...begin(), assistant([{ ...call, id: 'root' }]), rootCall, result('root'), ...end()]
+    expect(() => reopen([...prior, dispatch('start'), dispatch('end')])).not.toThrow()
+    expect(() => reopen([...prior, dispatch('start', { rootCallId: 'unknown', parentCallId: 'unknown' })]))
+      .toThrow('no prior root tool/call')
+  })
+
   it.each([
     ['outside turn', [dispatch('start')]],
     ['without start', [...begin(), dispatch('end')]],

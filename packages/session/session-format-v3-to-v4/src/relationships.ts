@@ -59,6 +59,7 @@ class Relationships {
   protectedHead: number | undefined
   compaction: Compaction | undefined
   readonly tools = new Map<string, ToolState>()
+  readonly rootToolCalls = new Set<string>()
   readonly dispatches = new Map<string, { data: SessionFormatJsonObject; settled: boolean }>()
   readonly retries: SessionFormatJsonObject[] = []
   readonly startedRetries = new Set<string>()
@@ -180,10 +181,12 @@ class Relationships {
   }
 
   dispatch(event: SessionFormatEvent, data: SessionFormatJsonObject): void {
-    if (event.type === 'tool/ptc-dispatch-start') this.requireTurn(event.type)
     const id = text(data['subCallId'], 'PTC subCallId')
     const root = text(data['rootCallId'], 'PTC rootCallId')
     const parent = text(data['parentCallId'], 'PTC parentCallId')
+    if (event.type === 'tool/ptc-dispatch-start' && this.turn === null && !this.rootToolCalls.has(root)) {
+      throw new SessionFormatError('PTC dispatch start outside an open turn has no prior root tool/call')
+    }
     const existing = this.dispatches.get(id)
     if (existing !== undefined && existing.data['rootCallId'] !== root) throw new SessionFormatError('PTC dispatch changes its rootCallId')
     if (parent !== root && this.dispatches.get(parent)?.data['rootCallId'] !== root) throw new SessionFormatError('PTC parentCallId does not belong to rootCallId')
@@ -294,7 +297,11 @@ class Relationships {
         this.step = null
         this.nextStep += 1
         break
-      case 'assistant/message': case 'tool/call': case 'tool/result': this.tool(event, data); break
+      case 'assistant/message': case 'tool/result': this.tool(event, data); break
+      case 'tool/call':
+        this.tool(event, data)
+        this.rootToolCalls.add(text(data['callId'], 'tool call id'))
+        break
       case 'developer/message': this.developer(event, data); break
       case 'request/header':
         this.requireTurn(event.type)
