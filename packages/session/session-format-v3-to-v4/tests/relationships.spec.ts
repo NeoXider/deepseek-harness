@@ -139,6 +139,13 @@ describe('mandatory V4 dependent event restoration', () => {
     expect(() => reopen([...begin(), dispatch('start'), dispatch('start', { subCallId: 'grandchild', parentCallId: 'child' }), dispatch('end', { subCallId: 'grandchild', parentCallId: 'child' }), dispatch('end', { arguments: { b: 2, a: 1 } }), ...end()])).not.toThrow()
   })
 
+  it('accepts a matching PTC settlement after its originating turn ends', () => {
+    expect(() => reopen([...begin(), dispatch('start'), ...end(), dispatch('end')])).not.toThrow()
+    expect(() => reopen([...begin(), dispatch('start'), ...end(), row('turn/start', { turn: 2 }), dispatch('end')])).not.toThrow()
+    expect(() => reopen([...begin(), dispatch('start'), ...end(), dispatch('end', { name: 'other' })])).toThrow('PTC dispatch does not match its start')
+    expect(() => reopen([...begin(), ...end(), dispatch('end')])).toThrow('PTC dispatch has no unique start')
+  })
+
   it.each([
     ['outside turn', [dispatch('start')]],
     ['without start', [...begin(), dispatch('end')]],

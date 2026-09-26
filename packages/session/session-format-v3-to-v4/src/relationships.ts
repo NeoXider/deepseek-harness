@@ -1,4 +1,4 @@
-/** Mandatory native V4 relationships; incomplete tails retain their open transactions. */
+/** Mandatory native V4 relationships; asynchronous PTC settlements may outlive their turn. */
 
 import { isDeepStrictEqual } from 'node:util'
 import { SessionFormatError, isSessionFormatJsonObject, sessionFormatCount } from '@deepseek-ai/dsh-session-format'
@@ -180,7 +180,7 @@ class Relationships {
   }
 
   dispatch(event: SessionFormatEvent, data: SessionFormatJsonObject): void {
-    this.requireTurn(event.type)
+    if (event.type === 'tool/ptc-dispatch-start') this.requireTurn(event.type)
     const id = text(data['subCallId'], 'PTC subCallId')
     const root = text(data['rootCallId'], 'PTC rootCallId')
     const parent = text(data['parentCallId'], 'PTC parentCallId')
