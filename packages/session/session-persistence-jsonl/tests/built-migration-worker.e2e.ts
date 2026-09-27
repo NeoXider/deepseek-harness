@@ -18,6 +18,7 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
       import { Worker } from 'node:worker_threads'
       import { Context } from '@deepseek-ai/cordis'
       import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+      import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
       import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 
       const root = await mkdtemp(join(tmpdir(), 'dsh-built-migration-'))
@@ -55,8 +56,20 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
         }
         const verified = await verify(0)
         const refused = await verify(1)
+        const ptc = { rootCallId: 'root', parentCallId: 'root', subCallId: 'child', name: 'read', arguments: { a: 1 } }
+        const events = [
+          { type: 'turn/start', data: { turn: 1 } },
+          { type: 'step/start', data: { turn: 1, step: 1 } },
+          { type: 'tool/ptc-dispatch-start', data: ptc },
+          { type: 'step/end', data: { turn: 1, step: 1 } },
+          { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+          { type: 'tool/ptc-dispatch', data: ptc },
+        ].map((event, seq) => sessionFormatCatalog.encodeCurrentEvent({ ...event, seq, time: seq + 1 }))
+        await writeFile(currentPath, [header, ...events].map(row => JSON.stringify(row)).join('\\n') + '\\n')
+        const latePtc = await verify(events.length)
         console.log(JSON.stringify({ id: header.id, version: header.version,
-          verified: verified.ok, refused: refused.ok, refusal: refused.message }))
+          verified: verified.ok, refused: refused.ok, refusal: refused.message,
+          latePtc: latePtc.ok, latePtcError: latePtc.message }))
       } finally {
         await ctx.fiber.dispose()
         await rm(root, { recursive: true, force: true })
@@ -75,6 +88,7 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
     expect(JSON.parse(stdout.trim())).toEqual({
       id: 'built-migration-worker', version: SESSION_FORMAT_VERSION, verified: true, refused: false,
       refusal: 'current session generation contains 0 events, expected 1',
+      latePtc: true,
     })
   })
 })
